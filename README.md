@@ -2,7 +2,7 @@
 
 Audit your Claude Code agent architecture. Detect autonomy risks, observability gaps, and rule coverage issues before they cost you.
 
-Built by [Oaken AI](https://oakenai.tech) based on patterns from Andrew Ng's agent design framework and Claude Code's internal architecture.
+Built by [Oaken AI](https://oakenai.tech) based on the [Stanford CS230 guest lecture on building with LLMs](https://oakenai.tech/resources/standford-ai-training) and Claude Code's internal architecture.
 
 [![PyPI](https://img.shields.io/pypi/v/claude-agent-auditor)](https://pypi.org/project/claude-agent-auditor/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -14,7 +14,7 @@ Scans your Claude Code workspace and generates a visual HTML report showing:
 - **Architecture Score** (0-100) based on agent safety and observability patterns
 - **Autonomy Risk** — LOW / MEDIUM / HIGH based on permission settings and safety controls
 - **Observability Coverage** — which hooks are present vs. missing (tracing, session logging, memory preservation)
-- **Problem Type Coverage** — do your rules address domain gaps, context limits, hallucinations, and control?
+- **Problem Type Coverage** — do your rules address domain knowledge gaps, context window limits, hallucinations, and difficulty of control?
 - **Rule Overlap Detection** — finds redundant rules wasting context budget
 - **Agent Setup Analysis** — skills, orchestration patterns, subagent delegation
 
@@ -113,14 +113,14 @@ Checks for six hooks across three priority tiers:
 | USEFUL | PostToolUse: Write\|Edit | Audit file changes |
 | USEFUL | PostToolUse: Bash | Log all executed commands |
 
-### Problem Type Coverage (Andrew Ng's Framework)
+### Problem Type Coverage (Stanford CS230 Framework)
 
-Checks whether your rules address the four fundamental LLM problems:
+Checks whether your rules address the four fundamental LLM problems identified in the [Stanford CS230 guest lecture](https://oakenai.tech/resources/standford-ai-training):
 
-- **Domain Gap** — Does the agent know enough? (RAG, context injection, domain rules)
-- **Context Limits** — Does it handle long conversations? (compaction, memory, summarization)
-- **Hallucination** — Does it verify before acting? (verification, grounding, skepticism)
-- **Control** — Can you constrain its behavior? (deny rules, ask rules, scope limits)
+- **Domain Knowledge Gaps** — Does the agent know enough? (RAG, context injection, domain rules)
+- **Context Window Limits** — Does it handle long conversations? (compaction, memory, summarization)
+- **Hallucinations** — Does it verify before acting? (verification, grounding, skepticism)
+- **Difficulty of Control** — Can you constrain its behavior? (deny rules, ask rules, scope limits)
 
 ### Rule Architecture
 
@@ -137,7 +137,7 @@ Checks whether your rules address the four fundamental LLM problems:
 
 ## The Patterns
 
-This tool checks your workspace against agent architecture patterns from Claude Code's framework and Andrew Ng's CS230 LLM design principles:
+This tool checks your workspace against agent architecture patterns from Claude Code's framework and the [Stanford CS230 LLM engineering principles](https://oakenai.tech/resources/standford-ai-training):
 
 1. **Autonomy Gates** — Every permission expansion should have a corresponding safety rule
 2. **Observability First** — If you don't have traces, you can't debug your agent system

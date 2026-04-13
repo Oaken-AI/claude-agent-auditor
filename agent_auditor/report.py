@@ -567,13 +567,13 @@ def _build_recommendations(report: AgentPatternReport, now: str) -> str:
         uncovered = [pc for pc in report.rule_arch.problem_coverage if not pc.covered]
         if uncovered:
             templates = {
-                "Domain Gap":     ("domain-gap.md",
+                "Domain Knowledge Gaps": ("domain-gap.md",
                     "# Domain Knowledge Rules\n\n## When to Use External Context\n- Verify claims against retrieved documents before asserting facts\n- If domain knowledge is uncertain, retrieve before responding\n- Prefer RAG context over training-time knowledge for time-sensitive facts"),
-                "Context Limits": ("context-limits.md",
+                "Context Window Limits": ("context-limits.md",
                     "# Context Management Rules\n\n## Long Session Handling\n- Summarize key decisions when conversation exceeds 50 turns\n- Use MEMORY.md to persist critical facts across sessions\n- Invoke PreCompact preservation before long multi-step operations"),
-                "Hallucination":  ("hallucination-prevention.md",
+                "Hallucinations":        ("hallucination-prevention.md",
                     "# Hallucination Prevention Rules\n\n## Verification Before Action\n- Never assert a file exists without reading it first\n- Verify API endpoints before calling them\n- If uncertain, say so explicitly — do not fabricate plausible-sounding answers"),
-                "Control":        ("control.md",
+                "Difficulty of Control": ("control.md",
                     "# Agent Control Rules\n\n## Scope Limits\n- Only modify files in the project directory unless explicitly authorized\n- Do not push to remote without explicit user confirmation\n- Do not send external messages (Slack, email, webhooks) without approval"),
             }
             uncovered_html = f"""

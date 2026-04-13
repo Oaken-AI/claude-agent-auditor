@@ -1,6 +1,6 @@
 """Agent architecture scanner - analyzes Claude Code workspace for agentic pattern quality.
 
-Checks derived from Stanford CS230 / Andrew Ng principles on building production LLM systems,
+Checks derived from the Stanford CS230 guest lecture on building production LLM systems
 mapped to detectable signals in Claude Code workspace configuration.
 """
 from __future__ import annotations
@@ -188,8 +188,8 @@ PROBLEM_KEYWORDS: dict[str, list[str]] = {
 PROBLEM_LABELS = {
     "domain-gap":    "Domain Knowledge Gaps",
     "context-limit": "Context Window Limits",
-    "hallucination": "Hallucination / Accuracy",
-    "control":       "Control & Safety",
+    "hallucination": "Hallucinations",
+    "control":       "Difficulty of Control",
 }
 
 PROBLEM_DESCRIPTIONS = {
