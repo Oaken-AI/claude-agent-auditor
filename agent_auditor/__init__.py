@@ -7,6 +7,6 @@ Built by Benjamin M. Brown
 
 MIT License - https://github.com/Oaken-AI/claude-agent-auditor
 """
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "Benjamin M. Brown"
 __author_url__ = "https://github.com/benjaminmbrown"

@@ -1,6 +1,6 @@
 [project]
 name = "claude-agent-auditor"
-version = "0.1.0"
+version = "0.2.0"
 description = "Audit your Claude Code agent architecture. Detect autonomy risks, observability gaps, and rule coverage issues."
 readme = "README.md"
 license = {text = "MIT"}
