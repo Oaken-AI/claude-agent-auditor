@@ -1,0 +1,33 @@
+[project]
+name = "claude-agent-auditor"
+version = "0.1.0"
+description = "Audit your Claude Code agent architecture. Detect autonomy risks, observability gaps, and rule coverage issues."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [{name = "Benjamin M. Brown", email = "ben@oakenai.tech"}]
+maintainers = [{name = "Oaken AI", email = "ben@oakenai.tech"}]
+keywords = ["claude", "claude-code", "ai", "agent", "audit", "architecture", "agentic", "observability"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+[project.urls]
+Homepage = "https://oakenai.tech/tools/claude-agent-auditor"
+Repository = "https://github.com/Oaken-AI/claude-agent-auditor"
+PyPI = "https://pypi.org/project/claude-agent-auditor/"
+"AI Consulting" = "https://oakenai.tech"
+
+[project.scripts]
+claude-agent-auditor = "agent_auditor.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent_auditor"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
