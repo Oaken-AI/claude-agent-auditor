@@ -21,6 +21,15 @@ MIN_RULE_LINES = 30           # minimum lines for a rule to enter overlap analys
 MAX_OVERLAP_PAIRS = 10        # how many overlap pairs to surface in the report
 MIN_SPECIALIZED_AGENTS = 2    # minimum distinct agent types to count as "specialized"
 
+# Secret patterns to flag in workspace files
+SECRET_PATTERNS: list[tuple[str, str]] = [
+    (r'sk-ant-[A-Za-z0-9\-_]{20,}', "Anthropic API key"),
+    (r'sk-[A-Za-z0-9]{32,}', "OpenAI-style API key"),
+    (r'(?i)(api[_\-]?key|secret[_\-]?key|access[_\-]?token)\s*[=:]\s*["\']?[A-Za-z0-9+/\-_]{20,}', "API key or token"),
+    (r'ghp_[A-Za-z0-9]{36}', "GitHub personal access token"),
+    (r'(?i)(password|passwd)\s*[=:]\s*["\']?[^\s"\']{8,}', "Plaintext password"),
+]
+
 
 # ── Dataclasses ───────────────────────────────────────────────────────────────
 
@@ -95,6 +104,9 @@ class AgentSetupMetrics:
     has_specialized_agents: bool
     has_orchestrator_pattern: bool
     memory_entry_count: int
+    has_mcp_servers: bool
+    mcp_server_count: int
+    mcp_server_names: list[str]
 
 
 @dataclass
@@ -107,6 +119,7 @@ class AgentPatternReport:
     observability: ObservabilityMetrics | None = None
     rule_arch: RuleArchMetrics | None = None
     agent_setup: AgentSetupMetrics | None = None
+    secrets_exposed: list[dict[str, str]] = field(default_factory=list)
     issues: list[dict[str, Any]] = field(default_factory=list)
     recommendations: list[dict[str, Any]] = field(default_factory=list)
 
@@ -326,6 +339,76 @@ def _broad_allow(rule: str) -> bool:
     return False
 
 
+def _extract_mcp_servers(settings: dict[str, Any]) -> tuple[bool, int, list[str]]:
+    """Return (has_mcp, count, names) from merged settings."""
+    names: set[str] = set()
+    for _key, cfg in settings.items():
+        # .mcp.json style via enabledMcpjsonServers
+        for name in cfg.get("enabledMcpjsonServers", []):
+            if isinstance(name, str):
+                names.add(name)
+        # Direct mcpServers block (legacy / some configs)
+        mcp_block = cfg.get("mcpServers", {})
+        if isinstance(mcp_block, dict):
+            names.update(mcp_block.keys())
+    return bool(names), len(names), sorted(names)
+
+
+def _check_secrets_in_files(claude_dir: Path, root: Path) -> list[dict[str, str]]:
+    """Scan workspace files for accidentally committed secrets.
+
+    Intentionally narrow scope: only settings files, .env files, and rules/
+    (not skills/, plugins/, or other documentation directories).
+    """
+    findings: list[dict[str, str]] = []
+    compiled = [(re.compile(pat), label) for pat, label in SECRET_PATTERNS]
+
+    # Only scan high-risk locations — not skill/plugin docs
+    scan_files = [
+        root / "CLAUDE.md",
+        claude_dir / "settings.json",
+        claude_dir / "settings.local.json",
+        root / ".env",
+        root / ".env.local",
+    ]
+    scan_dirs = [
+        claude_dir / "rules",   # project rules only, not global skills/plugins
+    ]
+    # Also scan project .claude/ for any stray .env files
+    if claude_dir.is_dir():
+        for f in claude_dir.glob("*.env"):
+            scan_files.append(f)
+
+    checked: set[Path] = set()
+
+    def _scan_file(path: Path) -> None:
+        if path in checked or not path.is_file():
+            return
+        checked.add(path)
+        content = _safe_read(path)
+        if not content:
+            return
+        for compiled_pat, label in compiled:
+            if compiled_pat.search(content):
+                findings.append({
+                    "file": str(path),
+                    "type": label,
+                })
+                break  # one finding per file is enough
+
+    for f in scan_files:
+        _scan_file(f)
+
+    for d in scan_dirs:
+        if d.exists() and d.is_dir():
+            for f in d.rglob("*.md"):
+                _scan_file(f)
+            for f in d.rglob("*.env"):
+                _scan_file(f)
+
+    return findings
+
+
 # ── Analysis functions ────────────────────────────────────────────────────────
 
 def _analyze_autonomy(settings: dict[str, Any]) -> AutonomyMetrics:
@@ -486,7 +569,7 @@ def _analyze_rule_architecture(rules: list[tuple[str, str]]) -> RuleArchMetrics:
     )
 
 
-def _analyze_agent_setup(root: Path, claude_dir: Path) -> AgentSetupMetrics:
+def _analyze_agent_setup(root: Path, claude_dir: Path, settings: dict[str, Any] | None = None) -> AgentSetupMetrics:
     # Memory system — check standard locations
     memory_paths = [
         Path.home() / ".claude" / "projects",
@@ -549,6 +632,8 @@ def _analyze_agent_setup(root: Path, claude_dir: Path) -> AgentSetupMetrics:
     has_specialized = len(found_agents) >= MIN_SPECIALIZED_AGENTS
     has_orchestrator = any(kw in all_rule_content for kw in ORCHESTRATOR_KEYWORDS)
 
+    has_mcp, mcp_count, mcp_names = _extract_mcp_servers(settings or {})
+
     return AgentSetupMetrics(
         has_memory_system=has_memory,
         has_recall_script=has_recall,
@@ -557,6 +642,9 @@ def _analyze_agent_setup(root: Path, claude_dir: Path) -> AgentSetupMetrics:
         has_specialized_agents=has_specialized,
         has_orchestrator_pattern=has_orchestrator,
         memory_entry_count=memory_entry_count,
+        has_mcp_servers=has_mcp,
+        mcp_server_count=mcp_count,
+        mcp_server_names=mcp_names,
     )
 
 
@@ -670,6 +758,28 @@ def _detect_issues_and_score(report: AgentPatternReport) -> tuple[list[dict], in
                 "message": "No memory/RAG system detected. Agents rely entirely on in-context knowledge — domain gaps can't be filled dynamically.",
                 "impact": f"-{penalty} points",
             })
+        if ag.has_mcp_servers and report.autonomy and not report.autonomy.deny_count:
+            penalty = 5
+            score -= penalty
+            server_list = ", ".join(ag.mcp_server_names[:3]) + ("..." if ag.mcp_server_count > 3 else "")
+            issues.append({
+                "severity": "warning",
+                "category": "agent_setup",
+                "message": f"{ag.mcp_server_count} MCP server(s) configured ({server_list}) but no deny rules. MCP tools expand Claude's action surface — add deny rules for sensitive operations.",
+                "impact": f"-{penalty} points",
+            })
+
+    # Secrets exposure
+    if report.secrets_exposed:
+        penalty = 15
+        score -= penalty
+        files = ", ".join(set(s["file"].split("/")[-1] for s in report.secrets_exposed[:3]))
+        issues.append({
+            "severity": "critical",
+            "category": "security",
+            "message": f"Potential secrets detected in workspace files ({files}). API keys or tokens in .claude/ files could be committed to version control.",
+            "impact": f"-{penalty} points",
+        })
 
     return issues, max(0, min(100, score))
 
@@ -743,6 +853,15 @@ def _generate_recommendations(report: AgentPatternReport) -> list[dict[str, Any]
                 "estimated_time": "20-30 minutes per pair",
                 "impact": "Cleaner context, less instruction conflict",
             })
+
+    if report.secrets_exposed:
+        recs.append({
+            "priority": "P0",
+            "title": "Remove secrets from workspace files",
+            "description": f"Potential API keys or tokens were detected in {len(report.secrets_exposed)} workspace file(s). Move all secrets to environment variables or a .secrets file outside your project. Ensure .claude/settings.local.json is in .gitignore.",
+            "estimated_time": "10 minutes",
+            "impact": "Prevent credential exposure in version control",
+        })
 
     if report.agent_setup and not report.agent_setup.has_recall_script:
         recs.append({
@@ -822,7 +941,8 @@ def scan_workspace(workspace_path: str | None = None) -> AgentPatternReport:
     report.autonomy = _analyze_autonomy(settings)
     report.observability = _analyze_observability(settings)
     report.rule_arch = _analyze_rule_architecture(rules)
-    report.agent_setup = _analyze_agent_setup(root, claude_dir)
+    report.agent_setup = _analyze_agent_setup(root, claude_dir, settings)
+    report.secrets_exposed = _check_secrets_in_files(claude_dir, root)
 
     report.issues, report.architecture_score = _detect_issues_and_score(report)
     report.recommendations = _generate_recommendations(report)

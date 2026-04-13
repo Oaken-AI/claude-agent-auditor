@@ -384,6 +384,25 @@ def _build_before(report: AgentPatternReport, now: str) -> str:
                 <tr><td>Specialized agents</td><td>{"<span class='hook-present'>&#x2713; " + agents_str + "</span>" if ag.has_specialized_agents else "<span style='color:#888'>None detected</span>"}</td></tr>
                 <tr><td>Orchestrator pattern</td><td>{"<span class='hook-present'>&#x2713; Delegation pattern found</span>" if ag.has_orchestrator_pattern else "<span style='color:#888'>Not detected</span>"}</td></tr>
                 <tr><td>Memory entries</td><td>{ag.memory_entry_count} lines</td></tr>
+                <tr><td>MCP servers</td><td>{f"<span class='hook-present'>&#x2713; {ag.mcp_server_count} configured</span>" if ag.has_mcp_servers else "<span style='color:#888'>None detected</span>"}</td></tr>
+            </table>
+        </div>"""
+
+    # Secrets exposure warning block
+    if report.secrets_exposed:
+        secret_rows = "".join(
+            f"<tr><td><code>{html.escape(s['file'].split('/')[-1] if '/' in s['file'] else s['file'].split(chr(92))[-1])}</code></td><td>{html.escape(s['type'])}</td></tr>"
+            for s in report.secrets_exposed
+        )
+        agent_setup_html += f"""
+        <div class="card critical" style="margin-top:0.75rem;">
+            <h3 style="color:#ef4444;">&#x26A0; Potential Secrets Detected</h3>
+            <p style="font-size:0.85rem;color:#888;margin-bottom:0.75rem;">
+                The following files may contain API keys, tokens, or passwords. Remove secrets from workspace files and use environment variables instead.
+            </p>
+            <table>
+                <tr><th>File</th><th>Pattern Type</th></tr>
+                {secret_rows}
             </table>
         </div>"""
 
