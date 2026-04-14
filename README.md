@@ -7,6 +7,21 @@ Built by [Oaken AI](https://oakenai.tech) based on the [Stanford CS230 guest lec
 [![PyPI](https://img.shields.io/pypi/v/claude-agent-auditor)](https://pypi.org/project/claude-agent-auditor/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+---
+
+<div align="center">
+
+<a href="https://donate.stripe.com/6oUcN7bmr5OIfQH4O153O00">
+  <img src="donate.png" alt="Buy me a coffee" width="80" />
+</a>
+
+**⚡ This tool is free and open-source.**<br>
+If it saved you time, [buy me a coffee](https://donate.stripe.com/6oUcN7bmr5OIfQH4O153O00) — it fuels more free AI tools.
+
+</div>
+
+---
+
 ## What It Does
 
 Scans your Claude Code workspace and generates a visual HTML report showing:
