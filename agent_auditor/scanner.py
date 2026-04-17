@@ -924,6 +924,34 @@ def _generate_recommendations(report: AgentPatternReport) -> list[dict[str, Any]
     return recs
 
 
+# ── SDK detection helper (for app-mode routing) ───────────────────────────────
+
+def _detect_sdk_imports(root: Path) -> bool:
+    """Return True if any Python or TS/JS file imports the Anthropic SDK."""
+    import re as _re
+    py_pats = [
+        _re.compile(r'import\s+anthropic'),
+        _re.compile(r'from\s+anthropic\s+import'),
+        _re.compile(r'anthropic\.Anthropic\('),
+        _re.compile(r'AsyncAnthropic\('),
+    ]
+    ts_pats = [
+        _re.compile(r'from\s+["\']@anthropic-ai/sdk["\']'),
+        _re.compile(r'require\(["\']@anthropic-ai/sdk["\']'),
+        _re.compile(r'new\s+Anthropic\('),
+    ]
+    globs = list(root.rglob("*.py"))[:200] + list(root.rglob("*.ts"))[:200] + list(root.rglob("*.js"))[:200]
+    for path in globs:
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            pats = py_pats if path.suffix == ".py" else ts_pats
+            if any(p.search(text) for p in pats):
+                return True
+        except OSError:
+            continue
+    return False
+
+
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 def scan_workspace(workspace_path: str | None = None) -> AgentPatternReport:
@@ -963,26 +991,24 @@ def scan_workspace(workspace_path: str | None = None) -> AgentPatternReport:
     claude_dir = root / ".claude"
     used_fallback = False
     if not claude_dir.exists():
-        claude_dir = Path.home() / ".claude"
-        used_fallback = True
-
-    if not claude_dir.exists():
+        # Don't fall back to global config — check if this is an SDK app instead
+        from .app_scanner import scan_app, PY_SDK_PATTERNS, TS_SDK_PATTERNS
+        sdk_found = _detect_sdk_imports(root)
+        if sdk_found:
+            # Route to app-mode scanner; caller (cli.py) handles AppAuditReport
+            return scan_app(str(root))  # type: ignore[return-value]
         report.issues.append({
             "severity": "error",
             "category": "structure",
-            "message": "No .claude/ directory found. Is this a Claude Code workspace?",
+            "message": (
+                "No .claude/ directory found. "
+                "This does not appear to be a Claude Code workspace or Claude SDK application."
+            ),
         })
         return report
 
     report.claude_dir_path = str(claude_dir)
     report.used_fallback = used_fallback
-
-    if used_fallback:
-        report.issues.append({
-            "severity": "info",
-            "category": "structure",
-            "message": f"No .claude/ in project. Scanning global config at {claude_dir}.",
-        })
 
     settings = _load_settings(claude_dir)
     rules = _load_all_rules(claude_dir, root)
