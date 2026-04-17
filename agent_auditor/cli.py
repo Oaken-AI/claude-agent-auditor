@@ -56,6 +56,12 @@ def main():
         help="Suppress terminal output",
     )
     parser.add_argument(
+        "--mode",
+        choices=["auto", "workspace", "app"],
+        default="auto",
+        help="Scan mode: auto (default), workspace (Claude Code config), app (SDK source scan)",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -75,7 +81,11 @@ def main():
         print(f"  Output:   {output_dir}\n")
 
     # Scan
-    report = scan_workspace(workspace_path)
+    if args.mode == "app":
+        from .app_scanner import scan_app
+        report = scan_app(workspace_path)
+    else:
+        report = scan_workspace(workspace_path)
 
     if isinstance(report, AppAuditReport):
         # App-mode path
