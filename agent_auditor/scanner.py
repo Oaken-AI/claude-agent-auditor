@@ -27,8 +27,50 @@ SECRET_PATTERNS: list[tuple[str, str]] = [
     (r'sk-[A-Za-z0-9]{32,}', "OpenAI-style API key"),
     (r'(?i)(api[_\-]?key|secret[_\-]?key|access[_\-]?token)\s*[=:]\s*["\']?[A-Za-z0-9+/\-_]{20,}', "API key or token"),
     (r'ghp_[A-Za-z0-9]{36}', "GitHub personal access token"),
-    (r'(?i)(password|passwd)\s*[=:]\s*["\']?[^\s"\']{8,}', "Plaintext password"),
+    # Password pattern — requires 12+ chars to reduce false positives on short dev values
+    (r'(?i)(password|passwd)\s*[=:]\s*["\']?[^\s"\']{12,}', "Plaintext password"),
 ]
+
+# Strings that indicate a match is a placeholder/example rather than a real secret
+_PLACEHOLDER_MARKERS = (
+    "...", "xxx", "your_", "_here", "example", "placeholder",
+    "replace_me", "changeme", "insert_", "fixme", "todo",
+    "<api_key>", "<token>", "<secret>", "sk-ant-...", "sk-...",
+)
+
+# Words that indicate a password value is a dev/test credential
+_DEV_PASSWORD_WORDS = (
+    "dev", "test", "local", "example", "dummy", "fake", "demo",
+    "sample", "staging", "mock", "temp", "default",
+)
+
+
+def _is_false_positive(line: str, match_str: str) -> bool:
+    """Return True if a regex match looks like an example/placeholder rather than a real secret."""
+    line_l = line.lower()
+    match_l = match_str.lower()
+
+    # Skip if the matched string itself contains placeholder markers
+    for marker in _PLACEHOLDER_MARKERS:
+        if marker in match_l:
+            return True
+
+    # Skip if the whole line contains placeholder indicators
+    if any(m in line_l for m in ("example", "placeholder", "your_api_key", "insert_key", "replace_me")):
+        return True
+
+    # For password matches: skip if the value is a simple dev word (all lowercase, no digits, no specials)
+    # e.g. POSTGRES_PASSWORD=claude_dev — clearly not a real password
+    pw_match = re.search(r'(?i)(password|passwd)\s*[=:]\s*["\']?([^\s"\']+)', line)
+    if pw_match:
+        pw_value = pw_match.group(2).lower().strip("'\"")
+        # Simple dev credential: only lowercase + underscore + digits, and contains a dev word
+        if re.match(r'^[a-z0-9_]+$', pw_value):
+            for dev_word in _DEV_PASSWORD_WORDS:
+                if dev_word in pw_value:
+                    return True
+
+    return False
 
 
 # ── Dataclasses ───────────────────────────────────────────────────────────────
@@ -389,7 +431,14 @@ def _check_secrets_in_files(claude_dir: Path, root: Path) -> list[dict[str, str]
         if not content:
             return
         for compiled_pat, label in compiled:
-            if compiled_pat.search(content):
+            m = compiled_pat.search(content)
+            if m:
+                # Check the line containing the match for false-positive markers
+                line_start = content.rfind("\n", 0, m.start()) + 1
+                line_end = content.find("\n", m.end())
+                line = content[line_start: line_end if line_end != -1 else len(content)]
+                if _is_false_positive(line, m.group(0)):
+                    continue
                 findings.append({
                     "file": str(path),
                     "type": label,
